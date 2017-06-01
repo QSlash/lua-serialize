@@ -149,9 +149,8 @@ if lua_version < 5.2 then
 	
 else
 
-	function tree.fromstring(src,env)
-		local fun = assert(loadstring('return '..src))
-		local _ENV = env or _ENV
+	function tree.fromstring(src,env)	
+		local fun = assert(load('return '..src,nil,nil,env or _ENV))
 		local suc, ret = pcall(fun)
 		if not suc then
 			error(ret)
