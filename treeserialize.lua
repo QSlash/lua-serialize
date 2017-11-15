@@ -128,7 +128,7 @@ function tree.depthfirsteach(fun, lt, rt)
 end
 
 local lua_version = tonumber(string.match(_VERSION,'%d.%d'))
-
+local unpack=unpack
 
 if lua_version < 5.2 then
 
@@ -148,7 +148,7 @@ if lua_version < 5.2 then
 	end
 	
 else
-
+	unpack = table.unpack
 	function tree.fromstring(src,env)	
 		local fun = assert(load('return '..src,nil,nil,env or _ENV))
 		local suc, ret = pcall(fun)
