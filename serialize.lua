@@ -1,4 +1,3 @@
-
 local unpack=unpack or table.unpack
 local rawlen=rawlen or function(t)return #t end
 
@@ -47,6 +46,8 @@ local function defaultlocflit(k,v,t)
 	return (kt=='number' and isint(k) or kt=='string') and vt~='number' and vt~='boolean'
 end
 
+local valimportflit={boolean=true,number=true}
+
 local function importloc(t,flit)
 	if t==nil then return end
 	
@@ -55,10 +56,12 @@ local function importloc(t,flit)
 	flit=flit or defaultlocflit
 	local function impl(t)
 		for k,v in pairs(t) do		
-			if (type(k)=='string' or type(k)=='number') and ret[v]==nil and flit(k,v,t) then
+			local orgloc=ret[v]
+			if (orgloc==nil or #orgloc>#kstack+1) and flit(k,v,t) then				
 				local loc=shollowcopy(kstack)
-				table.insert(loc,k)
+				table.insert(loc,k)				
 				ret[v]=loc
+				
 				if type(v) == 'table' then
 					table.insert(kstack,k)
 					impl(v)
@@ -104,14 +107,17 @@ local function writenbn(v,text)--number boolean nil
 	return true
 end
 
+--local endtableName={N='n', R='r', M='m', A='a', S='s'}
+local tableHeadTran={N='R',n='r'}
+
 local function _tostring(target,import,datagetter)
 	import=import or {}
 	
 	local allt={}
 	local ipool,tpool,vpool=idpool{},idpool{},idpool{}
 	local nt=0
-	local sflit,lflit,nameflit=6,100,8
-	local itext,vtext,ttext={'local I=IMPORTV{'},{'\nlocal V={'},{'\nreturn '}
+	local sflit,nameflit=4,8
+	local itext,vtext,ttext={'local I=IMPORTV{'},{'\nlocal V={'},{'\nreturn {'}
 
 	local function write(v)
 		if writenbn(v,ttext) then
@@ -138,7 +144,7 @@ local function _tostring(target,import,datagetter)
 		local vt=type(v)
 			
 		if vt=='string' then
-			if #v<sflit then
+			if #v<sflit then --save directly may use less charcter
 				table.insert(ttext,string.format('%q',v))
 			else
 				local id,isnew=vpool(v)
@@ -154,74 +160,157 @@ local function _tostring(target,import,datagetter)
 			if tr then
 				if tr<0 then--headpos
 					nt=nt+1
-					ttext[-tr]=('R(%d){'):format(nt)
+					local endc=tableHeadTran[ttext[-tr]]--assert(ttext[-tr]=='n',or ttext[-tr]=='N')
+
+					ttext[-tr]=string.format('%d,%s',nt,endc)
 					tr,allt[v]=nt,nt
 				end
-				table.insert(ttext,('T(%d)'):format(tr))
+				table.insert(ttext,tr)
+				table.insert(ttext,',T')
 				return
 			end
 
-			table.insert(ttext,'{')
+			table.insert(ttext,'N')
 			local headpos=#ttext
 			allt[v]=-headpos
-			
 			
 			local tlen,done=rawlen(v),{}
 
 			for i=1,tlen do
 				local subv=rawget(v,i)
 				if subv~=nil then done[i]=true end
-				write(subv)
 				table.insert(ttext,',')
+				write(subv)
 			end
 			
+			if tlen > 0 then table.insert(ttext,',A') end
+			local tailpos=#ttext
 			for k,subv in next,v do
 				if not done[k] then 
-					local kt=type(k)
-					if kt=='string' and #k<nameflit and k:match("^[_%a][_%a%d]*$") then								
-						table.insert(ttext,k)
-						table.insert(ttext,'=')
-					else
-						table.insert(ttext,'[')
-						write(k)
-						table.insert(ttext,']=')
-					end
-						
-					write(subv)
 					table.insert(ttext,',')
+					write(k)
+					table.insert(ttext,',')
+					write(subv)
 				end
 			end
+			
+			if tailpos~=#ttext then table.insert(ttext,',S') end
 						
 			local mt=getmetatable(v)
 			if mt then
-				if ttext[headpos]=='{' then
-					ttext[headpos]='M{'
-				end
-				table.insert(ttext,'[M]=')
+				table.insert(ttext,',')
 				write(mt)
+				table.insert(ttext,',')
+				table.insert(ttext,'M')
 			end
 
-			endtable(ttext)
+			ttext[#ttext]=string.lower(ttext[#ttext])
 		else		
-			table.insert(ttext,'C(')
 			write(datagetter(v))
-			table.insert(ttext,')')
+			table.insert(ttext,',C')
 		end
 	end
 	
 	write(target)
-	
+	endtable(ttext)
 	local alltxt={ttext}
 	
 	if #vtext > 1 then table.insert(alltxt,endtable(vtext)) end
 	if #itext > 1 then table.insert(alltxt,endtable(itext)) end
 	
-	for i=#alltxt-1,1,-1 do-- print(i,'SUB:',table.concat(alltxt[i]))
+	for i=#alltxt-1,1,-1 do
 		movepush(alltxt[i],alltxt[#alltxt])
 	end
 	
 	return table.concat(alltxt[#alltxt])
 end
+
+
+local function removen(t,n)
+	for i=1,n do table.remove(t) end
+end
+
+local function newtable_end(stack)
+	table.insert(stack,{})
+end
+
+local function newtable(stack,_,tstack)
+	table.insert(stack,{})
+	table.insert(tstack,#stack)
+end
+
+local function newreftable_end(stack,reft)
+	local l,t=#stack,{}
+	local idx=stack[l]
+	reft[idx]=t
+	stack[l]=t
+end
+
+local function newreftable(stack,reft,tstack)
+	newreftable_end(stack,reft)
+	table.insert(tstack,#stack)
+end
+
+local function reftable(stack,reft)
+	local l=#stack
+	stack[l]=reft[stack[l]]
+end
+
+local function _setmetatable(stack)
+	local l=#stack
+	setmetatable(stack[l-1],stack[l])
+	table.remove(stack)
+end
+
+local function setmetatable_end(stack,_,tstack)
+	_setmetatable(stack) 
+	table.remove(tstack)
+end
+
+local function setarray(stack,_,tstack)
+	local l=#stack	
+	local tidx=tstack[#tstack]
+	local n=l-tidx
+	local t=stack[tidx]
+
+	for i=1,n do t[i]=stack[tidx+i] end
+	removen(stack,n)
+end
+local function setarray_end(stack,_,tstack)
+	setarray(stack,_,tstack) 
+	table.remove(tstack)
+end
+
+local function setmap(stack,_,tstack)
+	local l=#stack
+	local tidx=tstack[#tstack]
+	local n=l-tidx
+	local t=stack[tidx]
+
+	for i=1,n,2 do rawset(t,stack[tidx+i],stack[tidx+i+1]) end
+	removen(stack,n)
+end
+
+local function setmap_end(stack,_,tstack)
+	setmap(stack,_,tstack) 
+	table.remove(tstack)
+end
+
+local function buildrpn(t,env)
+	local stack,reft,tstack,isfun={},{},{},{}
+	for _,k in next,env do isfun[k]=true end
+	
+	for _,v in next,t do
+		if isfun[v] then
+			v(stack,reft,tstack)
+		else
+			table.insert(stack,v)
+		end
+	end
+
+	return unpack(stack)
+end
+
 
 local function getloc(t,loc)
 	local suc
@@ -236,11 +325,8 @@ local function getloc(t,loc)
 	end
 	return t
 end
-
-local function makeenv(import,create)
-	local reft={}
-
-	local function IMPORTV(locs)
+local function makeenv(import,creator)
+	local function locatelist(locs)
 		local loclist={}
 		for _,loc in ipairs(locs) do 
 			table.insert(loclist,getloc(import,loc)) 
@@ -248,64 +334,30 @@ local function makeenv(import,create)
 		return loclist
 	end
 	
-	local function M(t)
-		local mt=rawget(t,M)
-		rawset(t,M,nil)
-		return setmetatable(t,mt)
-	end
-	--local building,refed=1,2
-	local function R(id)
-		local mark=reft[id]
-		if not mark then
-			mark={{},1}
-			reft[id]=mark
-		end
-				
-		return function(t)
-			if mark[2]==2 then
-				t=move(t,mark[1])
-			else
-				mark[1]=t
-			end
-
-			table.remove(mark)
-			
-			local mt=t[M]
-			if mt then
-				rawset(t,M,nil)
-				setmetatable(t,mt)
-			end
-			
-			return t
-		end
+	local function create(stack)
+		local l=#stack
+		stack[l]=creator(stack[l])
 	end
 	
-	local function T(id)
-		local mark=reft[id]
-		if not mark then
-			mark={{},2}
-			reft[id]=mark
-		elseif mark[2]==1 then
-			mark[2] = 2
-		end
+	return {
+		N=newtable,n=newtable_end,
+		M=_setmetatable,m=setmetatable_end,
+		T=reftable,
+		R=newreftable,r=newreftable_end,
+		A=setarray,a=setarray_end,
+		S=setmap,s=setmap_end,
+		IMPORTV=locatelist,C=create
+		}	
 
-		return mark[1]
-	end
-
-	return {M=M,T=T,R=R,IMPORTV=IMPORTV,C=create}
 end
 
 local function dostring(savestr,import,create)
-	local fun,msg=loadsource(savestr,makeenv(import or {},create or error))
-	if fun then
-		return pcall(fun)
-	else
-		return false,msg
-	end
+	local env=makeenv(import or {},create or error)
+	local t,s=loadsource(savestr,env)
+	if not t then return t,s end
+	s,t=pcall(t)
+	if not s then return s,t end	
+	return true,buildrpn(t,env)
 end
 
---local function ttostring(target,import, importflit, datagetter)
---	return _tostring(target,importloc(import or {},importflit or defaultlocflit),datagetter or error)
---end
---using import when saving
-return {load=dostring,save=_tostring, import=importloc}
+return {load=dostring,save=_tostring, import=importloc, flit=defaultlocflit}
