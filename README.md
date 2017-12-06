@@ -16,10 +16,10 @@ flit(k,v,t)--default by import import默认过滤函数
 import{1,A=96,[3.14]='PI',[true]='TURE'} 等效于 import{1,A=96,[true]='TURE'}
 import{1,A=96,[3.14]='PI',[true]='TURE'} equal to import{1,A=96,[true]='TURE'}
 
-local function defaultlocflit(k,v,t)
-	local kt,vt=type(k),type(v)
-	return ( (kt=='number' and isint(k)) or kt=='string' or kt=='boolean') and vt~='number' and vt~='boolean'
-end
+	function flit(k,v,t)
+		local kt,vt=type(k),type(v)
+		return ( (kt=='number' and isint(k)) or kt=='string' or kt=='boolean') and vt~='number' and vt~='boolean'
+	end
 
 this serialize lib is compatible with lua5.14 lua5.32 and luajit2.0
 support cycle, not support functions or userdata directly, use import and saver/loader for to catch function,userdata and coroutine.
