@@ -1,15 +1,21 @@
 # lua-serialize
+除了其他库也提供的序列化功能，本库增加了import机制来导入引用，一方面可以用以序列化函数，一方面使旧数据可以比较容易兼容新的程序改动，比较一般的做法是把函数，元表，以及资源字符串之类的部分作为引用导入。
+
 serialize support 4 functions:
 
 	save(tbl,[import=nil,loader=error])
-import is returned from import function
-
+tbl: the table to save
+tbl: 要存储的table
+import: a value-location map, returned by import function
+值-路径表 由import函数生成
 	load(savestr,[import=nil,saver=error])
-savestr is truned by save
-
-	import(reftable,[filt=flit])
-
-
+savestr:is returned by save. 
+savestr:save生成的字符串
+import: can be the table passed to import.
+import: 可以直接用存储时给import的参数
+	import(reftable,[flit=flit])
+import{{A={1,2}}}=>{{1,2}={1,'A'}}.flit returns true if you want the value refed
+如果希望一个值被引用, 就通过flit函数返回true
 	flit(k,v,t)
 default by import import默认过滤函数,返回true表示可引用
 return true if the value shall be refed
