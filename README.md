@@ -58,7 +58,8 @@ use flit by avoid referencing lib.Str
 	tc=slz.load(str,{mt,Str='String Three Not import'})
 	print(tc.strref)
 	
-如果要存储的值类型是function closure thread userdata 又不在import列表里 会调用saver函数 默认saver为error 直接报错
+如果要存储的值类型是function closure thread userdata 又不在import列表里 会调用saver函数 默认saver为error 既遇到没有import的function closure thread userdata直接报错
+
 if a is not a function closure thread or userdata,and not imported, saver willbe called，the default saver function is error.
 	
 	local function saveprint(fun)
