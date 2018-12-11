@@ -97,7 +97,11 @@ end
 local function writenbn(v,text)--number boolean nil
 	local vt=type(v)
 	if vt=='number' then 
-		tinsert(text,v) 
+		if v ~= v then
+			tinsert(text,'(0/0)') 
+		else 
+			tinsert(text,v) 
+		end
 	elseif vt=='boolean' or v==nil then
 		tinsert(text,tostring(v))
 	else
